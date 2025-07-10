@@ -147,7 +147,7 @@ function [total_loss, results] = runSimulation(params, sim_params, exp_data_A, e
     
     % Setup cumate induction function
     cumate_params = [2.5, 1946.6, 0.013, 1.5];
-    cumate_concentrations = [5, 1000];  % 低态/高态库马汀浓度
+    cumate_concentrations = [5, 1000];  % Low/High cumate
     
     % Calculate induction strength
     induction_strength = calculateInductionStrength(cumate_params, cumate_concentrations);
