@@ -1,30 +1,33 @@
-%% Biochemical Reaction Network Parameter Fitting Code
-% This code is used for fitting parameters of CRISPR-Cas system based biological switches
+%% Biochemical Reaction Network Simulation Code
+% This code shows the fitting results of Fig. S7 Panel 2-4
 % Uses Gillespie algorithm for stochastic simulation
 
-clear all;
-close all;
-clc;
-warning('off');
-
 %% ================== Load Experimental Data ==================
+base_line = 50;
+
 % Dataset A: A-node expression data during stimulation
-experimental_data_A = [33.21034333, 159.5112333, 233.9074333, 276.2746, 285.7165333, ...
+raw_data_A = [33.21034333, 159.5112333, 233.9074333, 276.2746, 285.7165333, ...
                        277.0111667, 252.9988333, 213.2478, 185.0001, 145.9864667, ...
                        107.04506, 90.17657667, 71.67451, 59.09033333, 52.08817, ...
                        47.95737333, 46.54682333, 46.51112667];
 
+experimental_data_A = log(raw_data_A + base_line);
+
 % Dataset B: B-node expression data during stimulation
-experimental_data_B = [942.7497333, 962.2061, 923.3546667, 822.5150667, 680.4816333, ...
+raw_data_B = [942.7497333, 962.2061, 923.3546667, 822.5150667, 680.4816333, ...
                        516.8535333, 394.9654, 273.5470667, 208.0181333, 143.5598, ...
                        117.1417, 100.0699133, 83.43736333, 72.91440333, 73.49182, ...
                        70.41011333, 62.96470667, 56.75531667];
 
-% Dataset C: A-node expression data after stimulation
-experimental_data_C = [126.0033667, 140.2573, 129.5871667, 125.7795, 141.622, ...
+experimental_data_B = log(raw_data_B + base_line);
+
+% Dataset C: B-node expression data after stimulation
+raw_data_C = [126.0033667, 140.2573, 129.5871667, 125.7795, 141.622, ...
                        179.8475333, 204.1667, 202.3627667, 191.3148333, 162.2389667, ...
                        190.7813333, 203.8730667, 227.8121667, 250.6040667, 252.4869333, ...
                        311.4014667, 321.5470667, 317.6719];
+
+experimental_data_C = log(raw_data_C + base_line);
 
 % Time points (hours)
 time_points = [0, 0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -44,63 +47,40 @@ reaction_matrix = defineReactionMatrix();
 %% ================== Simulation Parameter Settings ==================
 simulation_params = struct();
 simulation_params.max_steps = 8e5;           
-simulation_params.num_cells = 1000;          
+simulation_params.num_cells = 100;          
 simulation_params.equilibrium_time = 4e5;    
 simulation_params.stimulation_time = 2e5;    
 simulation_params.recording_interval = 0.05 * 3600;  
 simulation_params.time_delay = 0.5;          
 
-%% ================== Parameter Fitting Main Loop ==================
-best_loss = inf;
-best_params = [];
-num_iterations = 100;
+%% ================== Set Current Parameters ==================
+% Use the base parameters directly (no optimization)
+current_params = [8.92078E-08, 1.6858E-5, 0.0717, 0.922, 0.712, 0.0148, 11.716, 0.309];
 
-% 基准参数
-base_params = [8.92078E-08, 1.6858E-5, 0.0717, 0.922, 0.712, 0.0148, 11.716, 0.309];
+fprintf('Running simulation with current parameters...\n');
+fprintf('Parameters: [%.6e, %.6e, %.6e, %.6e, %.6e, %.6e, %.6e, %.6e]\n', current_params);
 
-fprintf('Starting parameter fitting...\n');
+%% ================== Run Simulation ==================
+% Run simulation with current parameters
+[loss_total, simulation_results] = runSimulation(current_params, simulation_params, ...
+                                                experimental_data_A, experimental_data_B, ...
+                                                experimental_data_C, weights_A, weights_B, ...
+                                                weights_C, time_points);
 
-for iteration = 1:num_iterations
-    fprintf('Iteration %d/%d\n', iteration, num_iterations);
-    
-    % Randomly perturb parameters
-    current_params = perturbParameters(base_params, 0.1);
-    
-    % Run simulation
-    [loss_total, simulation_results] = runSimulation(current_params, simulation_params, ...
-                                                    experimental_data_A, experimental_data_B, ...
-                                                    experimental_data_C, weights_A, weights_B, ...
-                                                    weights_C, time_points);
-    
-    % Update best parameters
-    if loss_total < best_loss
-        best_loss = loss_total;
-        best_params = current_params;
-        fprintf('Found better parameters, loss function: %.6f\n', best_loss);
-    end
-    
-    % Visualize results
-    if mod(iteration, 1) == 0
-        visualizeResults(simulation_results, iteration);
-    end
-end
+% Display results
+fprintf('Simulation completed!\n');
+fprintf('Total loss function: %.6f\n', loss_total);
 
-fprintf('Parameter fitting completed!\n');
-fprintf('Best parameters: [%.6e, %.6e, %.6e, %.6e, %.6e, %.6e, %.6e, %.6e]\n', best_params);
-fprintf('Minimum loss function: %.6f\n', best_loss);
+%% ================== Visualize Results ==================
+% Create visualization
+visualizeResults(simulation_results, base_line, experimental_data_A, experimental_data_B, experimental_data_C, time_points, 1);
 
 %% ================== Helper Functions ==================
 
 function weights = calculateWeights(data)
     % Calculate variance-based weights
-    weights = 1 ./ (data.^2);
+    weights = data.^2;
     weights = weights / sum(weights);
-end
-
-function perturbed_params = perturbParameters(base_params, perturbation_factor)
-    % Randomly perturb parameters
-    perturbation = (rand(1, length(base_params)) * 2 * perturbation_factor - perturbation_factor + 1);
-    perturbed_params = perturbation .* base_params;
 end
 
 function reaction_matrix = defineReactionMatrix()
@@ -147,7 +127,7 @@ function [total_loss, results] = runSimulation(params, sim_params, exp_data_A, e
     
     % Setup cumate induction function
     cumate_params = [2.5, 1946.6, 0.013, 1.5];
-    cumate_concentrations = [5, 1000];  % Low/High cumate
+    cumate_concentrations = [5, 1000];  % Low/High cumate concentration
     
     % Calculate induction strength
     induction_strength = calculateInductionStrength(cumate_params, cumate_concentrations);
@@ -157,24 +137,25 @@ function [total_loss, results] = runSimulation(params, sim_params, exp_data_A, e
     molecules = repmat(initial_molecules, sim_params.num_cells, 1);
     
     % Run simulation
-    [recorded_data] = gillespieSimulation(molecules, params, sim_params, induction_strength);
+    recorded_data = gillespieSimulation(molecules, params, sim_params, induction_strength);
+    results = struct();
+    results.recorded_data = recorded_data;
     
     % Process data and calculate loss function
-    [model_A, model_B, model_C] = processSimulationData(recorded_data, sim_params, time_points);
+    [model_A, model_B, model_C] = processSimulationData(results.recorded_data, sim_params, time_points);
     
     % Calculate fitting loss
-    loss_A = calculateFitScore(exp_data_A, weights_A, model_A);
-    loss_B = calculateFitScore(exp_data_B, weights_B, model_B);
-    loss_C = calculateFitScore(exp_data_C, weights_C, model_C);
-    
+    [fitted_A, loss_A, ~] = calculateFitScore(exp_data_A , weights_A, model_A);
+    [fitted_B, loss_B, ~] = calculateFitScore(exp_data_B , weights_B, model_B);
+    [fitted_C, loss_C, beta] = calculateFitScore(exp_data_C , weights_C, model_C);
+    % disp(beta)
+    save('beta.mat', 'beta')
     total_loss = loss_A + loss_B + loss_C;
     
     % Save results for visualization
-    results = struct();
-    results.model_A = model_A;
-    results.model_B = model_B;
-    results.model_C = model_C;
-    results.recorded_data = recorded_data;
+    results.model_A = fitted_A;
+    results.model_B = fitted_B;
+    results.model_C = fitted_C;
 end
 
 function induction_strength = calculateInductionStrength(params, concentrations)
@@ -194,10 +175,11 @@ function [recorded_data] = gillespieSimulation(molecules, params, sim_params, in
     current_induction = induction_strength(1) * ones(num_cells, 1);
     
     % Reaction matrix
+    record_space = 4000;
     recorded_data = struct();
-    recorded_data.pre_stimulation = [];
-    recorded_data.during_stimulation = [];
-    recorded_data.post_stimulation = [];
+    recorded_data.pre_stimulation = zeros(num_cells,record_space, 4);
+    recorded_data.during_stimulation = zeros(num_cells,record_space,4);
+    recorded_data.post_stimulation = zeros(num_cells,record_space, 4);
     
     % Reaction matrix
     reaction_matrix = defineReactionMatrix();
@@ -248,13 +230,13 @@ function reaction_rates = calculateReactionRates(molecules, induction, params)
     
     % Set reaction rate parameters
     rate_params = [params(1)*induction, params(1)*induction, params(2)*ones(num_cells,1), ...
-                   params(3)*ones(num_cells,1), params(4)*ones(num_cells,1), params(5)*ones(num_cells,1), ...
+                   params(3)*ones(num_cells,1), params(3)*ones(num_cells,1), params(3)*ones(num_cells,1), ...
+                   params(4)*ones(num_cells,1), params(4)*ones(num_cells,1), params(5)*ones(num_cells,1), ...
+                   params(5)*ones(num_cells,1), params(5)*ones(num_cells,1), params(6)*ones(num_cells,1), ...
                    params(6)*ones(num_cells,1), params(7)*ones(num_cells,1), params(8)*ones(num_cells,1), ...
-                   params(8)*ones(num_cells,1), params(8)*ones(num_cells,1), params(1)*induction, ...
-                   params(1)*induction, params(2)*ones(num_cells,1), params(3)*ones(num_cells,1), ...
-                   1e-7*ones(num_cells,1), params(6)*ones(num_cells,1), params(7)*ones(num_cells,1), ...
-                   params(8)*ones(num_cells,1), params(8)*ones(num_cells,1)];
-    
+                   1e-7*ones(num_cells,1), params(4)*ones(num_cells,1), params(4)*ones(num_cells,1), ...
+                   params(6)*ones(num_cells,1), params(6)*ones(num_cells,1)];
+
     % Calculate rate for each reaction
     for i = 1:num_reactions
         reaction_rates(:, i) = calculateSingleReactionRate(molecules, rate_params(:, i), i);
@@ -335,27 +317,92 @@ end
 
 function recorded_data = recordData(recorded_data, molecules, time, sim_params)
     % Record simulation data
-    % Data recording logic needs to be implemented here
-    % Record data into different arrays based on time periods
-    % Simplified version, actual implementation requires more complex logic
     recorded_data.molecules = molecules;
     recorded_data.time = time;
+
+    for times = 1:length(time)
+        t_cell = time(times);
+        if t_cell < sim_params.equilibrium_time && floor(t_cell/sim_params.recording_interval) > recorded_data.pre_stimulation(times,1,4)
+            recorded_data.pre_stimulation(times,1,4) = floor(t_cell/sim_params.recording_interval);
+            recorded_data.pre_stimulation(times,floor(t_cell/sim_params.recording_interval),1:3) = [molecules(times,14), molecules(times,13), time(times)];
+            continue
+        end
+        
+        t_cell = time(times) - sim_params.equilibrium_time;
+        if t_cell >= 0 && t_cell < sim_params.stimulation_time && floor(t_cell/sim_params.recording_interval) > recorded_data.during_stimulation(times,1,4)
+            recorded_data.during_stimulation(times,1,4) = floor(t_cell/sim_params.recording_interval);
+            recorded_data.during_stimulation(times,floor(t_cell/sim_params.recording_interval),1:3) = [molecules(times,14), molecules(times,13), time(times)];
+            continue
+        end
+        
+        t_cell = time(times) - sim_params.equilibrium_time - sim_params.stimulation_time;
+        if t_cell >= 0 && floor(t_cell/sim_params.recording_interval) > recorded_data.post_stimulation(times,1,4)
+            recorded_data.post_stimulation(times,1,4) = floor(t_cell/sim_params.recording_interval);
+            recorded_data.post_stimulation(times,floor(t_cell/sim_params.recording_interval),1:3) = [molecules(times,14), molecules(times,13), time(times)];
+            continue
+        end
+    end
 end
 
 function [model_A, model_B, model_C] = processSimulationData(recorded_data, sim_params, time_points)
     % Process simulation data to match experimental time points
-    % Data processing logic needs to be implemented here
-    % Extract data at corresponding time points from recorded_data
-
-    model_A = log(rand(1, length(time_points)) * 100 + 1);
-    model_B = log(rand(1, length(time_points)) * 100 + 1);
-    model_C = log(rand(1, length(time_points)) * 100 + 1);
+    rec = zeros(sim_params.num_cells, length(time_points));
+    delay = 0.5;
+    
+    % Process model A data
+    for k = 1:sim_params.num_cells
+        B = (recorded_data.during_stimulation(k,1:400,3) - sim_params.equilibrium_time)/3600 - delay;
+        A = time_points;
+        
+        closest_values = interp1(B, B, A, 'nearest');
+        closest_values(isnan(closest_values)) = 0;
+        closest_indices = 1 + zeros(size(A));
+        for i = 1:length(A)
+            if closest_values(i) ~= 0
+                closest_indices(i) = find(B == closest_values(i), 1);
+            end
+        end
+        rec(k,:) = recorded_data.during_stimulation(k,closest_indices,2);
+    end
+    model_A = mean(rec);
+    
+    % Process model B data
+    for k = 1:sim_params.num_cells
+        B = (recorded_data.during_stimulation(k,1:400,3) - sim_params.equilibrium_time)/3600 - delay;
+        A = time_points;
+        
+        closest_values = interp1(B, B, A, 'nearest');
+        closest_values(isnan(closest_values)) = 0;
+        closest_indices = 1 + zeros(size(A));
+        for i = 1:length(A)
+            if closest_values(i) ~= 0
+                closest_indices(i) = find(B == closest_values(i), 1);
+            end
+        end
+        rec(k,:) = recorded_data.during_stimulation(k,closest_indices,1);
+    end
+    model_B =  mean(rec);
+    
+    % Process model C data
+    for k = 1:sim_params.num_cells
+        B = (recorded_data.post_stimulation(k,1:400,3) - sim_params.equilibrium_time - sim_params.stimulation_time)/3600 - delay;
+        A = time_points;
+        
+        closest_values = interp1(B, B, A, 'nearest');
+        closest_values(isnan(closest_values)) = 0;
+        closest_indices = 1 + zeros(size(A));
+        for i = 1:length(A)
+            if closest_values(i) ~= 0
+                closest_indices(i) = find(B == closest_values(i), 1);
+            end
+        end
+        rec(k,:) = recorded_data.post_stimulation(k,closest_indices,1);
+    end
+    model_C = mean(rec);
 end
 
-function loss = calculateFitScore(experimental_data, weights, model_data)
-    % Calculate fit score
-    % Linear fitting
-
+function [predicted, loss, beta] = calculateFitScore(experimental_data, weights, model_data)
+    % Calculate fit score using linear fitting
     X = [ones(length(model_data), 1), model_data'];
     beta = (X' * diag(weights) * X) \ (X' * diag(weights) * experimental_data');
     
@@ -363,31 +410,49 @@ function loss = calculateFitScore(experimental_data, weights, model_data)
     predicted = beta(1) + beta(2) * model_data;
     
     % Calculate mean squared error
-    loss = sum((log(predicted) - log(experimental_data)).^2);
+    loss = sum((predicted -experimental_data).^2);
 end
 
-function visualizeResults(results, iteration)
+function visualizeResults(results, base_line, exp_data_A, exp_data_B, exp_data_C, time_points, iteration)
     % Visualize results
+    figure('Name', sprintf('Simulation Results'), 'Position', [100 100 1200 300]);
     
-    figure('Name', sprintf('Iteration %d Results', iteration));
-    
-    subplot(2, 2, 1);
-    plot(results.model_A, 'b-', 'LineWidth', 2);
-    title('Node A Expression Model');
-    xlabel('Time Point');
+    subplot(1, 3, 1);
+    plot(time_points, exp(results.model_A) - base_line, 'g-', 'LineWidth', 2);
+    hold on;
+    plot(time_points, exp(exp_data_A) - base_line, 'k*', 'LineWidth', 2);
+    title('Node A Expression');
+    xlim([0 12]);
+    xlabel('Time (hours)');
     ylabel('Expression Level');
-    
-    subplot(2, 2, 2);
-    plot(results.model_B, 'r-', 'LineWidth', 2);
-    title('Node B Expression Model');
-    xlabel('Time Point');
+    legend('Model', 'Experimental', 'Location', 'best');
+    grid on;
+    axis square;
+
+    subplot(1, 3, 2);
+    plot(time_points, exp(results.model_B) - base_line, 'r-', 'LineWidth', 2);
+    hold on;
+    plot(time_points, exp(exp_data_B) - base_line, 'k*', 'LineWidth', 2);
+    title('Node B Expression during stimulation');
+    xlim([0 12]);
+    xlabel('Time (hours)');
     ylabel('Expression Level');
-    
-    subplot(2, 2, 3);
-    plot(results.model_C, 'g-', 'LineWidth', 2);
-    title('Node C Expression Model');
-    xlabel('Time Point');
+    ylim([0 1200])
+    legend('Model', 'Experimental', 'Location', 'best');
+    grid on;
+    axis square;
+
+    subplot(1, 3, 3);
+    plot(time_points, exp(results.model_C) - base_line, 'r-', 'LineWidth', 2);
+    hold on;
+    plot(time_points, exp(exp_data_C) - base_line, 'k*', 'LineWidth', 2);
+    title('Node B Expression after stimulation');
+    xlim([0 12]);
+    xlabel('Time (hours)');
     ylabel('Expression Level');
+    legend('Model', 'Experimental', 'Location', 'best');
+    grid on;
+    axis square;
 
     drawnow;
 end
