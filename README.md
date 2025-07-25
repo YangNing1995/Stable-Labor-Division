@@ -15,3 +15,23 @@ This folder contains code for the systematic enumeration of gene circuit topolog
 ### Stochastic Simulation
 This folder contains the code for stochastic simulations of gene circuit dynamics, including the fitting process of experimental data, bifurcation diagram analysis, and parameter swap simulations.
 
+## Software Requirements
+This repository uses both Python and MATLAB for circuit design, simulation, and analysis.
+
+### MATLAB
+- MATLAB R2024a 
+
+### Python Packages
+The Python components rely on the following libraries:
+
+- `intersect==1.2`
+- `jupyterlab==4.4.4`
+- `matplotlib==3.10.3`
+- `numpy==2.2.6`
+- `scipy==1.15.3`
+- `seaborn==0.13.2`
+
+You can install all Python dependencies using:
+
+```bash
+pip install intersect==1.2 jupyterlab==4.4.4 matplotlib==3.10.3 numpy==2.2.6 scipy==1.15.3 seaborn==0.13.2
